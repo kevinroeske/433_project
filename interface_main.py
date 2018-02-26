@@ -36,14 +36,23 @@ def fetch_account(name):
 #
     record = open(data_path, 'r')
     customer = {}
-    for line in record:
-        if line == "Name: " + name:
-            data = line.split(' ', 2)
-            customer['name'] = data[1]
-            customer['act#'] = record.readline().split(' ', 2)[1]
-            customer['pin'] = record.readline(' ', 2).split()[1]
-            customer['bal'] = record.readline(' ', 2).split()[1]    #these hashed/encrypted strings might contain spaces, so we delimit split()
-    record.close()                                                  #on the first space and take the rest of the line as the cipher string
+    line = ''
+    while name not in line:
+        try:
+            line = record.readline()
+        except:
+            print("Profile not found")
+            return {}
+    if name in line:
+        data = line.split(' ', 1)
+        customer['Name'] = data[1]
+        data = record.readline()
+        customer['Acct#'] = data.split(' ', 1)[1]
+        data = record.readline()
+        customer['PIN'] = data.split(' ', 1)[1]                  #these hashed/encrypted strings might contain spaces, so we delimit split()
+        data = record.readline()
+        customer['Balance'] = data.split(' ', 1)[1]
+    record.close()                                                   #on the first space and take the rest of the line as the cipher string
     return customer
 
 def validate_pin(customer, pin):
@@ -52,20 +61,21 @@ def validate_pin(customer, pin):
 #the pin hash on file
 #
     hash_attempt = hash_password.hash_password(pin, salt)
-    return (customer['pin'] == hash_attempt)
+    pin_hash = customer['PIN'][:len(customer['PIN'])-1]     #have to chop off the end of line character or it won't hash right
+    return (pin_hash == hash_attempt)
 
 def generate_token(name):
 #
 #generates a session-specific token that grants access to data, and doubles as a signature and validation recipt for each
 #instance of data access
 #
-    time = arrow.get().isoformat()
+    time = arrow.now().isoformat()
     token = {}
     id_number = ''
     for index in range(16):
-        id_number += random.choice(string.hexdigits)
+        id_number += random.choice(string.hexdigits).lower()
     token['id'] = "0x"+id_number
-    token['time'] = arrow.get().isoformat()
+    token['time'] = time
     token['valid'] = True
     token['customer'] = name
     token_record = open(token_log, "a+")
@@ -76,42 +86,42 @@ def generate_token(name):
     return token
 
 def validate_token(token):
+    if token == {}:
+        return False
     token_record = open(token_log, "r")
     data = token_record.read()
     token_record.close()
     return (token['id'] in data and token['id'] + " invalidated" not in data and token['valid'] == True)
 
 def invalidate_token(token):
-    time = arrow.get().isoformat()
+    if token == {}:
+        return
+    time = arrow.now().isoformat()
     token['valid'] = False
     token_record = open(token_log, "a+")
     token_record.write("Token " + token['id'] + " invalidated at " + time + "\n\n\n")
     token_record.close()
 
 def get_data(customer, data_type, token):
-    if not (validate_token(token)) or customer != token['customer']:
+    if not (validate_token(token)) or customer['Name'] != token['customer']:
         return
-    time = arrow.get().isoformat()
-    customer_data = open(data_path, "r")
-    line = ''
-    while customer not in line:
-        line = customer_data.readline()
-    while data_type not in line:
-        line = customer_data.readline()
-    customer_data.close()
-    parts = line.split()
-    encoded_data = parts[1]
-    output_string = "Your " + data_type + " is " + des.decrypt(encoded_data) + "\n"
-    token_string = "Accessed using token " + token['id'] + " at " + time + "\n"
-    customer_name = customer.split()[0] + "_" + customer.split()[1]
+    time = arrow.now().isoformat()
+    encoded_data = customer[data_type]
+    output_string = "Your " + data_type + " is " + des.decrypt(encoded_data[:len(encoded_data)-1]) + "\n"   #again, chop off the end of
+    token_string = "Token used to access " + data_type + " at " + time + "\n"                               #line character or it won't
+    customer_name = customer['Name'].split()[0] + "_" + customer['Name'].split()[1]                         #decrypt
     output_file = open(output_path + "/" + customer_name + ".log", "a+")
     output_file.write(output_string)
+    output_file.close()
+    output_file = open(token_log, "a+")
     output_file.write(token_string)
     output_file.close()
 
-token = generate_token("John Brown")
+account = fetch_account("John Brown")
+token = {}
+if (validate_pin(account, '7876')):
+    token = generate_token(account['Name'])
 print(str(validate_token(token)))
-get_data("John Brown", "Balance", token)
+get_data(account, "Balance", token)
 invalidate_token(token)
-get_data("John Brown", "Balance", token)
 print(str(validate_token(token)))
