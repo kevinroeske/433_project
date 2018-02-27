@@ -4,12 +4,15 @@ from Crypto.Cipher import DES
 import hash_password
 import arrow
 import string
+import os
+import time
 
 salt ='' 
 key=''
 output_path=''
 data_path=''
 token_log = ''
+call_active = False
 
 config_file = open("secrets/secrets.ini", 'r')
 
@@ -35,14 +38,13 @@ def fetch_account(name):
 #walks the data file and extracts the encryted data for the customer, and returns it as a dictionary
 #
     record = open(data_path, 'r')
+    if name not in record.read():
+        return {}
+    record.seek(0,0)
     customer = {}
     line = ''
     while name not in line:
-        try:
-            line = record.readline()
-        except:
-            print("Profile not found")
-            return {}
+        line = record.readline()
     if name in line:
         data = line.split(' ', 1)
         customer['Name'] = data[1]
@@ -87,6 +89,7 @@ def generate_token(name):
 
 def validate_token(token):
     if token == {}:
+        print("Empty token")
         return False
     token_record = open(token_log, "r")
     data = token_record.read()
@@ -94,7 +97,7 @@ def validate_token(token):
     return (token['id'] in data and token['id'] + " invalidated" not in data and token['valid'] == True)
 
 def invalidate_token(token):
-    if token == {}:
+    if token == {} or token['valid'] == False:
         return
     time = arrow.now().isoformat()
     token['valid'] = False
@@ -103,7 +106,8 @@ def invalidate_token(token):
     token_record.close()
 
 def get_data(customer, data_type, token):
-    if not (validate_token(token)) or customer['Name'] != token['customer']:
+    if not (validate_token(token)):
+        print("Invalid token")
         return
     time = arrow.now().isoformat()
     encoded_data = customer[data_type]
@@ -117,11 +121,54 @@ def get_data(customer, data_type, token):
     output_file.write(token_string)
     output_file.close()
 
-account = fetch_account("John Brown")
-token = {}
-if (validate_pin(account, '7876')):
-    token = generate_token(account['Name'])
-print(str(validate_token(token)))
-get_data(account, "Balance", token)
-invalidate_token(token)
-print(str(validate_token(token)))
+def initiate_call():
+    globals()['call_active']=True
+    os.system('clear')
+    customer_name = raw_input("Customer Name: ")
+    account = fetch_account(customer_name)
+    if account == {}:
+        print("Account not found.")
+        return
+    pin_attempt = raw_input("PIN: ")
+    if not validate_pin(account, pin_attempt):
+        print("Invalid PIN")
+        return
+    token = generate_token(customer_name)
+    while(globals()['call_active'] == True):
+        call_menu(token, account)
+
+def call_menu(token, account):
+    os.system('clear')
+    print("Main Menu\n\n")
+    print("Select an option: \n")
+    print("C)heck Balance\n")
+    print("V)iew Account Number\n")
+    print("H)ang up")
+    option = raw_input("?")
+    if option.lower() == 'c':
+        print("Exporting Balance Information")
+        get_data(account, "Balance", token)
+    else:
+        if option.lower() == 'v':
+            print("Exporting Account Number")
+            get_data(account, "Acct#", token)
+        else:
+            if option.lower() == 'h':
+                print("Hanging up")
+                invalidate_token(token)
+                globals()['call_active'] = False
+            else:
+                print("Invalid Option")
+    time.sleep(1)
+
+input_choice = ''
+while(input_choice.lower() != 'q' ):
+    os.system('clear')
+    print("Teller interface prototype 0.1\n\n")
+    print("S)imulate customer login\n")
+    print("Q)uit\n\n")
+    input_choice = raw_input("?")
+    if input_choice.lower() == 's':
+        initiate_call()
+    if input_choice.lower() != 's' and input_choice.lower() != 'q':
+        print("Invalid choice")
