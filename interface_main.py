@@ -139,6 +139,9 @@ def initiate_call():
 
 def call_menu(token, account):
     os.system('clear')
+    print("************************************************************************************************\n")
+    print(account['Name'][:len(account['Name'])-1] + " logged in at " + token['time'] + "\n\n")
+    print("************************************************************************************************\n")
     print("Main Menu\n\n")
     print("Select an option: \n")
     print("C)heck Balance\n")
@@ -164,7 +167,9 @@ def call_menu(token, account):
 input_choice = ''
 while(input_choice.lower() != 'q' ):
     os.system('clear')
+    print("**********************************************************************************************\n\n")
     print("Teller interface prototype 0.1\n\n")
+    print("**********************************************************************************************\n\n")
     print("S)imulate customer login\n")
     print("Q)uit\n\n")
     input_choice = raw_input("?")
